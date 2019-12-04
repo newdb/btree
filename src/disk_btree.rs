@@ -1,6 +1,6 @@
-use wal_file::{RecordFile, RecordFileIterator, KeyValuePair};
+use crate::wal_file::{RecordFile, RecordFileIterator, KeyValuePair};
 
-use ::{KeyType, ValueType};
+use crate::{KeyType, ValueType};
 
 use std::error::Error;
 // use std::iter::Filter;
@@ -56,20 +56,20 @@ pub struct OnDiskBTreeIterator<'a, K: KeyType + 'a, V: ValueType + 'a> {
 
 
 impl <K: KeyType, V: ValueType> OnDiskBTree<K,V> {
-    pub fn new(file_path: String, key_size: usize, value_size: usize) -> Result<OnDiskBTree<K,V>, Box<Error>> {
-        return Ok(OnDiskBTree{file: try!(RecordFile::new(&file_path, key_size, value_size))});
+    pub fn new(file_path: String, key_size: usize, value_size: usize) -> Result<OnDiskBTree<K,V>, Box<dyn Error>> {
+        return Ok(OnDiskBTree{file: RecordFile::new(&file_path, key_size, value_size)?});
     }
 
-    pub fn is_new(&self) -> Result<bool, Box<Error>> {
+    pub fn is_new(&self) -> Result<bool, Box<dyn Error>> {
         return self.file.is_new();
     }
 
     /// Returns the number of records in the B+Tree
-    pub fn count(&self) -> Result<u64, Box<Error>> {
+    pub fn count(&self) -> Result<u64, Box<dyn Error>> {
         return self.file.count();
     }
 
-    pub fn insert_record(&mut self, kv: &KeyValuePair<K,V>) -> Result<(), Box<Error>> {
+    pub fn insert_record(&mut self, kv: &KeyValuePair<K,V>) -> Result<(), Box<dyn Error>> {
         return self.file.insert_record(kv);
     }
 
@@ -80,7 +80,7 @@ impl <K: KeyType, V: ValueType> OnDiskBTree<K,V> {
     }
 */
 
-    pub fn contains_key(&self, key: &K) -> bool {
+    pub fn contains_key(&self, _key: &K) -> bool {
         return true;
     }
 }

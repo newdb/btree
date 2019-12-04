@@ -7,9 +7,9 @@ mod wal_file;
 mod multi_map;
 mod disk_btree;
 
-use wal_file::{KeyValuePair, RecordFile};
-use multi_map::MultiMap;
-use disk_btree::OnDiskBTree;
+use crate::wal_file::{KeyValuePair, RecordFile};
+use crate::multi_map::MultiMap;
+use crate::disk_btree::OnDiskBTree;
 
 use rustc_serialize::{Encodable, Decodable};
 
@@ -38,7 +38,7 @@ pub struct BTree<K: KeyType, V: ValueType> {
 }
 
 impl <K: KeyType, V: ValueType> BTree<K, V> {
-    pub fn new(tree_file_path: &String, key_size: usize, value_size: usize) -> Result<BTree<K,V>, Box<Error>> {
+    pub fn new(tree_file_path: &String, key_size: usize, value_size: usize) -> Result<BTree<K,V>, Box<dyn Error>> {
         // create our in-memory multi-map
         let mut mem_tree = MultiMap::<K,V>::new();
 
@@ -46,17 +46,17 @@ impl <K: KeyType, V: ValueType> BTree<K, V> {
         let wal_file_path = tree_file_path.to_owned() + ".wal";
 
         // construct our WAL file
-        let mut wal_file = try!(RecordFile::<K,V>::new(&wal_file_path, key_size, value_size));
+        let mut wal_file = RecordFile::<K,V>::new(&wal_file_path, key_size, value_size)?;
 
         // if we have a WAL file, replay it into the mem_tree
-        if try!(wal_file.is_new()) {
+        if wal_file.is_new()? {
             for kv in &mut wal_file {
                 mem_tree.insert(kv.key, kv.value);
             }
         }
 
         // open the data file
-        let tree_file = try!(OnDiskBTree::<K,V>::new(tree_file_path.to_owned(), key_size, value_size));
+        let tree_file = OnDiskBTree::<K,V>::new(tree_file_path.to_owned(), key_size, value_size)?;
 
         return Ok(BTree{tree_file_path: tree_file_path.clone(),
                         key_size: key_size,
@@ -67,18 +67,18 @@ impl <K: KeyType, V: ValueType> BTree<K, V> {
     }
 
     /// Inserts a key into the BTree
-    pub fn insert(&mut self, key: K, value: V) -> Result<(), Box<Error>> {
+    pub fn insert(&mut self, key: K, value: V) -> Result<(), Box<dyn Error>> {
         let record = KeyValuePair{key: key, value: value};
 
         // should wrap this in a read-write lock
-        try!(self.wal_file.insert_record(&record));
+        self.wal_file.insert_record(&record)?;
 
         let KeyValuePair{key, value} = record;
 
         let size = self.mem_tree.insert(key, value);
 
         if size > MAX_MEMORY_ITEMS {
-            try!(self.compact());
+            self.compact()?;
         }
 
         return Ok( () );
@@ -90,9 +90,9 @@ impl <K: KeyType, V: ValueType> BTree<K, V> {
     }
 
     /// Merges the records on disk with the records in memory
-    fn compact(&mut self) -> Result<(), Box<Error>>{
+    fn compact(&mut self) -> Result<(), Box<dyn Error>>{
         // create a new on-disk BTree
-        let mut new_tree_file = try!(OnDiskBTree::<K,V>::new(self.tree_file_path.to_owned() + ".new", self.key_size, self.value_size));
+        let mut new_tree_file = OnDiskBTree::<K,V>::new(self.tree_file_path.to_owned() + ".new", self.key_size, self.value_size)?;
 
         // get an iterator for the in-memory items
         let mem_iter = self.mem_tree.into_iter();
@@ -101,7 +101,7 @@ impl <K: KeyType, V: ValueType> BTree<K, V> {
         let disk_iter = self.tree_file.into_iter();
 
         for kv in merge(mem_iter, disk_iter) {
-            try!(new_tree_file.insert_record(&kv));
+            new_tree_file.insert_record(&kv)?;
         }
 
         Ok( () )
@@ -114,12 +114,12 @@ impl <K: KeyType, V: ValueType> BTree<K, V> {
 mod tests {
     use std::fs;
     use std::fs::OpenOptions;
-    use ::BTree;
-    use rand::{thread_rng, Rng};
+    use crate::BTree;
+    use rand::{thread_rng, Rng, distributions::Alphanumeric};
     use std::collections::BTreeSet;
 
     pub fn gen_temp_name() -> String {
-        let file_name: String = thread_rng().gen_ascii_chars().take(10).collect();
+        let file_name: String = thread_rng().sample_iter(&Alphanumeric).take(10).collect();
 
         return String::from("/tmp/") + &file_name + &String::from(".btr");
     }

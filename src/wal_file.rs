@@ -4,7 +4,7 @@ extern crate rustc_serialize;
 use bincode::SizeLimit;
 use bincode::rustc_serialize::{encode, decode};
 
-use ::{KeyType, ValueType};
+use crate::{KeyType, ValueType};
 
 use std::error::Error;
 use std::fs::{File, OpenOptions};
@@ -42,8 +42,8 @@ pub struct RecordFileIterator<'a, K: KeyType + 'a, V: ValueType + 'a> {
 }
 
 impl <K: KeyType, V: ValueType> RecordFile<K,V> {
-    pub fn new(wal_file_path: &String, key_size: usize, value_size: usize) -> Result<RecordFile<K,V>, Box<Error>> {
-        let wal_file = try!(OpenOptions::new().read(true).write(true).create(true).open(wal_file_path));
+    pub fn new(wal_file_path: &String, key_size: usize, value_size: usize) -> Result<RecordFile<K,V>, Box<dyn Error>> {
+        let wal_file = OpenOptions::new().read(true).write(true).create(true).open(wal_file_path)?;
 
         return Ok(RecordFile{fd: wal_file,
                           key_size: key_size,
@@ -52,13 +52,13 @@ impl <K: KeyType, V: ValueType> RecordFile<K,V> {
                           _v_marker: PhantomData});
     }
 
-    pub fn is_new(&self) -> Result<bool, Box<Error>> {
-        Ok(try!(self.fd.metadata()).len() == 0)
+    pub fn is_new(&self) -> Result<bool, Box<dyn Error>> {
+        Ok(self.fd.metadata()?.len() == 0)
     }
 
     /// Returns the number of records in the WAL file
-    pub fn count(&self) -> Result<u64, Box<Error>> {
-        let file_size = try!(self.fd.metadata()).len();
+    pub fn count(&self) -> Result<u64, Box<dyn Error>> {
+        let file_size = self.fd.metadata()?.len();
         let rec_size: u64 = (self.key_size + self.value_size) as u64;
 
         if file_size % rec_size != 0 {
@@ -68,12 +68,12 @@ impl <K: KeyType, V: ValueType> RecordFile<K,V> {
         }
     }
 
-    pub fn insert_record(&mut self, kv: &KeyValuePair<K,V>) -> Result<(), Box<Error>> {
+    pub fn insert_record(&mut self, kv: &KeyValuePair<K,V>) -> Result<(), Box<dyn Error>> {
         // encode the record
         let record_size = self.key_size + self.value_size;
-        let mut buff = try!(encode(&kv, SizeLimit::Bounded(record_size as u64)));
+        let mut buff = encode(&kv, SizeLimit::Bounded(record_size as u64))?;
 
-        // padd it out to the max size
+        // add it out to the max size
         if buff.len() > self.key_size + self.value_size {
             return Err(From::from(IOError::new(ErrorKind::InvalidData, "Key and value size are too large")));
         } else {
@@ -94,7 +94,7 @@ impl <'a, K: KeyType, V: ValueType> IntoIterator for &'a mut RecordFile<K,V> {
 
     fn into_iter(self) -> Self::IntoIter {
         // seek back to the start
-        self.fd.seek(SeekFrom::Start(0));
+        self.fd.seek(SeekFrom::Start(0)).unwrap();
 
         // create our iterator
         RecordFileIterator{wal_file: self}
@@ -129,9 +129,9 @@ impl <'a, K: KeyType, V: ValueType> Iterator for RecordFileIterator<'a,K,V> {
 
 #[cfg(test)]
 mod tests {
-    use tests::gen_temp_name;
+    use crate::tests::gen_temp_name;
     use std::fs;
-    use wal_file::{RecordFile, KeyValuePair};
+    use crate::wal_file::{RecordFile, KeyValuePair};
 
     #[test]
     fn test_iterator() {

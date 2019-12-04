@@ -1,6 +1,6 @@
-use ::{KeyType, ValueType};
+use crate::{KeyType, ValueType};
 
-use wal_file::KeyValuePair;
+use crate::wal_file::KeyValuePair;
 
 use std::collections::{BTreeMap, BTreeSet};
 use std::collections::btree_map::Entry::Occupied;
@@ -138,7 +138,7 @@ impl <'a, K: KeyType, V: ValueType> Iterator for MultiMapIterator<'a,K,V> {
 
 #[cfg(test)]
 mod tests {
-    use multi_map::MultiMap;
+    use crate::multi_map::MultiMap;
 
     #[test]
     fn test_insert() {
